@@ -2,7 +2,7 @@
 
 Nieoficjalna integracja Home Assistant dla dziennika **eduVULCAN** (nowe API hebeCE firmy VULCAN).
 Pobiera dla każdego dziecka: plan lekcji (z zastępstwami i odwołaniami), prace domowe,
-sprawdziany i szczęśliwy numerek.
+sprawdziany i szczęśliwy numerek. Nowe wiadomości i ogłoszenia szkoły udostępnia jako zdarzenia.
 
 Oparta na zwendorowanej kopii biblioteki [bbrjpl1310b/iris](https://github.com/bbrjpl1310b/iris)
 (AGPL-3.0). Zero zewnętrznych zależności — wszystko, czego potrzebuje (pydantic, cryptography,
@@ -42,6 +42,38 @@ Dla każdego dziecka powstaje urządzenie `Szkoła <imię>` z sensorami:
 | `sensor.szkola_<imie>_szczesliwy_numerek` | numerek | `numer_w_dzienniku`, `trafiony` |
 
 Dane odświeżane co 30 minut.
+
+## Wiadomości i ogłoszenia (zdarzenia)
+
+Przy każdym odświeżeniu integracja sprawdza odebrane wiadomości (skrzynka ucznia) i ogłoszenia
+szkoły z ostatnich 30 dni. Dla każdej nowej pozycji wywołuje zdarzenie Home Assistant:
+
+| Zdarzenie | Dane |
+|---|---|
+| `eduvulcan_message` | `kid`, `id`, `subject`, `text` (treść bez HTML), `sender`, `attachments` (liczba), `date`, `test` |
+| `eduvulcan_announcement` | `kid`, `id`, `title`, `text`, `sender`, `category`, `valid_from`, `valid_to`, `attachments`, `date`, `test` |
+
+- Pierwsze odświeżenie po instalacji tylko zapamiętuje istniejące pozycje — stare wiadomości nie
+  są wysyłane ponownie. Stan jest trzymany w `.storage` i przetrwa restart.
+- Rodzeństwo może mieć wspólną skrzynkę — ta sama wiadomość wywołuje zdarzenie tylko raz.
+- Wycofane wiadomości są pomijane. Jeśli szkoła nie publikuje ogłoszeń (API zwraca 404),
+  integracja traktuje to jak brak ogłoszeń.
+- Akcja `eduvulcan.send_latest` wywołuje ponownie zdarzenia dla najnowszej wiadomości
+  i ogłoszenia, z `test: true` — do testowania automatyzacji.
+
+Przykład: przekazywanie nowych wiadomości na powiadomienie.
+
+```yaml
+triggers:
+  - trigger: event
+    event_type: eduvulcan_message
+actions:
+  - action: notify.send_message
+    target:
+      entity_id: notify.rodzina
+    data:
+      message: "{{ trigger.event.data.kid }}: {{ trigger.event.data.subject }} — {{ trigger.event.data.sender }}"
+```
 
 ## Zmiany względem oryginalnej biblioteki iris
 

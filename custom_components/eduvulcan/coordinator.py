@@ -23,6 +23,7 @@ from .const import (
 from .iris._exceptions import IrisApiException
 from .iris.api import IrisHebeCeApi
 from .iris.models import Account, Exam, Homework, Schedule
+from .messages import EduVulcanMessages
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ class EduVulcanCoordinator(DataUpdateCoordinator[dict[int, PupilData]]):
             update_interval=DEFAULT_UPDATE_INTERVAL,
         )
         self.api = api
+        self.messages = EduVulcanMessages(hass, entry.entry_id, api)
 
     async def async_close(self) -> None:
         """Release the underlying aiohttp session."""
@@ -219,5 +221,11 @@ class EduVulcanCoordinator(DataUpdateCoordinator[dict[int, PupilData]]):
 
         if not data:
             raise UpdateFailed("eduVULCAN: account list is empty")
+
+        # Messages/announcements are nice-to-have; they must never kill the whole refresh.
+        try:
+            await self.messages.async_check([p.account for p in data.values()])
+        except (IrisApiException, ValidationError, AttributeError, TypeError, KeyError):
+            _LOGGER.warning("eduVULCAN messages update failed", exc_info=True)
 
         return data
