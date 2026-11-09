@@ -28,5 +28,11 @@
       "exams": { "name": "Sprawdziany" },
       "lucky_number": { "name": "Szczęśliwy numerek" }
     }
+  },
+  "services": {
+    "send_latest": {
+      "name": "Wyślij najnowsze wiadomości",
+      "description": "Wywołuje zdarzenia eduvulcan_message i eduvulcan_announcement dla najnowszej wiadomości i ogłoszenia, z test ustawionym na true."
+    }
   }
 }

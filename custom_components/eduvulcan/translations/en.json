@@ -28,5 +28,11 @@
       "exams": { "name": "Exams" },
       "lucky_number": { "name": "Lucky number" }
     }
+  },
+  "services": {
+    "send_latest": {
+      "name": "Send latest messages",
+      "description": "Fires eduvulcan_message and eduvulcan_announcement events for the newest message and announcement, with test set to true."
+    }
   }
 }
