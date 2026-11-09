@@ -7,6 +7,9 @@ DOMAIN = "eduvulcan"
 CONF_CREDENTIAL = "credential"
 CONF_TENANT = "tenant"
 CONF_TOKENS = "tokens"
+# Options: eduVULCAN login used only for the web messages module.
+CONF_USERNAME = "username"
+CONF_PASSWORD = "password"
 
 DEFAULT_UPDATE_INTERVAL = timedelta(minutes=30)
 

@@ -23,16 +23,46 @@
   },
   "entity": {
     "sensor": {
-      "next_lesson": { "name": "Next lesson" },
-      "homework": { "name": "Homework" },
-      "exams": { "name": "Exams" },
-      "lucky_number": { "name": "Lucky number" }
+      "next_lesson": {
+        "name": "Next lesson"
+      },
+      "homework": {
+        "name": "Homework"
+      },
+      "exams": {
+        "name": "Exams"
+      },
+      "lucky_number": {
+        "name": "Lucky number"
+      }
     }
   },
   "services": {
     "send_latest": {
       "name": "Send latest messages",
       "description": "Fires eduvulcan_message and eduvulcan_announcement events for the newest message and announcement, with test set to true."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "eduVULCAN messages (web)",
+        "description": "Since November 2026 the mobile API serves messages only with eduVULCAN Premium. With your eduVULCAN e-mail and password the integration reads messages from the web module (wiadomosci.eduvulcan.pl) instead. The password is stored in plain text in Home Assistant, and opening a new message may mark it as read in eduVULCAN. One entry is enough for all pupils of the account. Leave both fields empty to turn it off.",
+        "data": {
+          "username": "eduVULCAN e-mail",
+          "password": "eduVULCAN password"
+        }
+      }
+    }
+  },
+  "issues": {
+    "web_auth": {
+      "title": "eduVULCAN: web login rejected",
+      "description": "eduVULCAN rejected the e-mail or password set in the integration options, so messages are not being read. Correct them in Settings → Devices & services → eduVULCAN → Configure. No further attempts are made until they change."
+    },
+    "web_captcha": {
+      "title": "eduVULCAN: captcha required",
+      "description": "eduVULCAN asks for a captcha at login, so messages are not being read. Log in once at https://eduvulcan.pl in a browser; the integration retries in a few hours. It never solves captchas itself."
     }
   }
 }

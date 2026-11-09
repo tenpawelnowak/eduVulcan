@@ -28,7 +28,8 @@ aiohttp), jest już w Home Assistant Core.
 
 Tokeny są **jednorazowe** i służą tylko do rejestracji "wirtualnego telefonu" (klucz RSA).
 Po rejestracji integracja odświeża dane sama — tokeny nie są nigdzie zapisywane.
-Hasło do eduVULCAN nigdy nie jest podawane w HA.
+Do planu, zadań, sprawdzianów i numerka hasło do eduVULCAN nie jest potrzebne.
+Wiadomości wymagają go od listopada 2026 — patrz niżej.
 
 ## Encje
 
@@ -42,6 +43,53 @@ Dla każdego dziecka powstaje urządzenie `Szkoła <imię>` z sensorami:
 | `sensor.szkola_<imie>_szczesliwy_numerek` | numerek | `numer_w_dzienniku`, `trafiony` |
 
 Dane odświeżane co 30 minut.
+
+## Wiadomości ze szkoły (moduł WWW)
+
+> ⚠️ **Hasło w Home Assistant.** Ta funkcja wymaga podania e-maila i **hasła do eduVULCAN**.
+> Są zapisywane w opcjach wpisu integracji (`.storage/core.config_entries`) **otwartym
+> tekstem** — tak jak większość haseł w HA. Każdy, kto ma dostęp do plików konfiguracji
+> HA albo do kopii zapasowych, może je odczytać.
+>
+> ⚠️ **Wiadomości mogą zostać oznaczone jako przeczytane.** Żeby wysłać treść nowej
+> wiadomości, integracja otwiera ją tak jak przeglądarka. eduVULCAN może wtedy oznaczyć ją
+> jako przeczytaną — także dla szkoły (nauczyciel zobaczy, że wiadomość została odczytana).
+> Treść pobierana jest wyłącznie dla nowych wiadomości.
+
+Od listopada 2026 API mobilne odpowiada na zapytania o wiadomości błędem
+`111: EDUVULCAN_PREMIUM` (wiadomości tylko z płatnym eduVULCAN Premium). Moduł WWW
+(`wiadomosci.eduvulcan.pl`), którego rodzice używają w przeglądarce, działa bez Premium,
+więc integracja może czytać wiadomości stamtąd:
+
+1. **Ustawienia → Urządzenia i usługi → eduVULCAN → Konfiguruj** (przy dowolnym wpisie)
+2. Wpisz e-mail i hasło, którymi logujesz się na eduvulcan.pl
+3. Wystarczy w jednym wpisie — dane są wspólne dla wszystkich dzieci z tego konta.
+   Puste pola wyłączają moduł WWW.
+
+Jak to działa: integracja loguje się na `eduvulcan.pl/logowanie`, otwiera
+`eduvulcan.pl/dostep-do-dziennika/`, wchodzi w link dziecka (to otwiera sesję w jego
+jednostce, np. `krakow`, `wieliczka`) i czyta `wiadomosci.eduvulcan.pl/<jednostka>/api/Odebrane`
+oraz `.../api/WiadomoscSzczegoly`. W jednej sesji aktywna jest tylko jedna jednostka, więc
+dzieci z różnych szkół obsługiwane są po kolei.
+
+- **Captcha:** jeśli eduVULCAN zażąda captchy, integracja **nie próbuje jej rozwiązać** —
+  przerywa, pokazuje zgłoszenie w HA (Ustawienia → Naprawy) i ponawia za kilka godzin.
+  Zaloguj się wtedy raz w przeglądarce.
+- **Złe hasło:** zgłoszenie w Naprawach; integracja nie próbuje ponownie, dopóki nie zmienisz
+  danych (żeby nie zablokować konta).
+- **Pierwsze uruchomienie** tylko zapamiętuje istniejące wiadomości — zdarzenia dostaniesz
+  dla wiadomości, które przyjdą później.
+
+### Zdarzenia
+
+| Zdarzenie | Dane |
+|---|---|
+| `eduvulcan_message` | `kid`, `id`, `subject`, `text` (bez HTML), `sender`, `attachments` (liczba), `date`, `test` |
+| `eduvulcan_announcement` | `kid`, `id`, `title`, `text`, `sender`, `category`, `valid_from`, `valid_to`, `attachments`, `date`, `test` |
+
+Ta sama wiadomość wysłana do rodzeństwa wywołuje zdarzenie raz. Usługa
+`eduvulcan.send_latest` wywołuje oba zdarzenia dla najnowszej wiadomości i ogłoszenia z
+`test: true` (do sprawdzania automatyzacji). Ogłoszenia nadal idą przez API mobilne.
 
 ## Zmiany względem oryginalnej biblioteki iris
 

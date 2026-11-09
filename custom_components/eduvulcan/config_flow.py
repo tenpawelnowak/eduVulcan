@@ -19,13 +19,24 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
+    TextSelectorType,
 )
 
-from .const import CONF_CREDENTIAL, CONF_TENANT, CONF_TOKENS, DEVICE_MODEL, DEVICE_OS, DOMAIN
+from .const import (
+    CONF_CREDENTIAL,
+    CONF_PASSWORD,
+    CONF_TENANT,
+    CONF_TOKENS,
+    CONF_USERNAME,
+    DEVICE_MODEL,
+    DEVICE_OS,
+    DOMAIN,
+)
 from .iris._exceptions import (
     ExpiredTokenException,
     FailedRequestException,
@@ -75,6 +86,11 @@ class EduVulcanConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the eduVULCAN config flow."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        return EduVulcanOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -137,3 +153,37 @@ class EduVulcanConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
         )
+
+
+class EduVulcanOptionsFlow(OptionsFlow):
+    """eduVULCAN e-mail and password for reading messages from the web module.
+
+    Stored in plain text in the config entry. Leave both empty to turn it off.
+    """
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            username = (user_input.get(CONF_USERNAME) or "").strip()
+            password = user_input.get(CONF_PASSWORD) or ""
+            if not username or not password:
+                return self.async_create_entry(data={})
+            return self.async_create_entry(
+                data={CONF_USERNAME: username, CONF_PASSWORD: password}
+            )
+
+        options = self.config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_USERNAME,
+                    description={"suggested_value": options.get(CONF_USERNAME)},
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.EMAIL)),
+                vol.Optional(
+                    CONF_PASSWORD,
+                    description={"suggested_value": options.get(CONF_PASSWORD)},
+                ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)

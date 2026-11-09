@@ -23,16 +23,46 @@
   },
   "entity": {
     "sensor": {
-      "next_lesson": { "name": "Następna lekcja" },
-      "homework": { "name": "Zadania domowe" },
-      "exams": { "name": "Sprawdziany" },
-      "lucky_number": { "name": "Szczęśliwy numerek" }
+      "next_lesson": {
+        "name": "Następna lekcja"
+      },
+      "homework": {
+        "name": "Zadania domowe"
+      },
+      "exams": {
+        "name": "Sprawdziany"
+      },
+      "lucky_number": {
+        "name": "Szczęśliwy numerek"
+      }
     }
   },
   "services": {
     "send_latest": {
       "name": "Wyślij najnowsze wiadomości",
       "description": "Wywołuje zdarzenia eduvulcan_message i eduvulcan_announcement dla najnowszej wiadomości i ogłoszenia, z test ustawionym na true."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Wiadomości eduVULCAN (WWW)",
+        "description": "Od listopada 2026 API mobilne udostępnia wiadomości tylko z eduVULCAN Premium. Z e-mailem i hasłem eduVULCAN integracja czyta wiadomości z modułu WWW (wiadomosci.eduvulcan.pl). Hasło jest zapisywane w Home Assistant otwartym tekstem, a otwarcie nowej wiadomości może oznaczyć ją w eduVULCAN jako przeczytaną. Wystarczy wpisać dane w jednym wpisie dla wszystkich dzieci z konta. Zostaw oba pola puste, żeby to wyłączyć.",
+        "data": {
+          "username": "E-mail eduVULCAN",
+          "password": "Hasło eduVULCAN"
+        }
+      }
+    }
+  },
+  "issues": {
+    "web_auth": {
+      "title": "eduVULCAN: logowanie WWW odrzucone",
+      "description": "eduVULCAN odrzucił e-mail lub hasło z opcji integracji, więc wiadomości nie są pobierane. Popraw je w Ustawienia → Urządzenia i usługi → eduVULCAN → Konfiguruj. Do czasu zmiany integracja nie próbuje logować się ponownie."
+    },
+    "web_captcha": {
+      "title": "eduVULCAN: wymagana captcha",
+      "description": "eduVULCAN żąda captchy przy logowaniu, więc wiadomości nie są pobierane. Zaloguj się raz na https://eduvulcan.pl w przeglądarce; integracja spróbuje ponownie za kilka godzin. Sama nigdy nie rozwiązuje captchy."
     }
   }
 }

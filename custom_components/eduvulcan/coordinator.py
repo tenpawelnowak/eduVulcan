@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_TENANT,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     EXAMS_DAYS_AHEAD,
@@ -23,7 +24,7 @@ from .const import (
 from .iris._exceptions import IrisApiException
 from .iris.api import IrisHebeCeApi
 from .iris.models import Account, Exam, Homework, Schedule
-from .messages import EduVulcanMessages
+from .messages import EduVulcanMessages, async_get_web_client
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +61,13 @@ class EduVulcanCoordinator(DataUpdateCoordinator[dict[int, PupilData]]):
             update_interval=DEFAULT_UPDATE_INTERVAL,
         )
         self.api = api
-        self.messages = EduVulcanMessages(hass, entry.entry_id, api)
+        self.messages = EduVulcanMessages(
+            hass,
+            entry.entry_id,
+            api,
+            entry.data[CONF_TENANT],
+            lambda: async_get_web_client(hass),
+        )
 
     async def async_close(self) -> None:
         """Release the underlying aiohttp session."""
