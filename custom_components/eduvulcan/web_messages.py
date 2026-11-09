@@ -19,6 +19,7 @@ If Vulcan asks for a captcha we stop and report it; we never try to solve it.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -27,6 +28,7 @@ from typing import Any
 from urllib.parse import urljoin, urlsplit
 
 import aiohttp
+from yarl import URL
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
@@ -49,6 +51,7 @@ SSO_FIELDS = {"wa", "wresult", "wctx", "SAMLResponse", "RelayState", "id_token",
 LIST_CACHE_SECONDS = 120
 PAGE_SIZE = 50
 CAPTCHA_BACKOFF = 6 * 3600
+MAX_REDIRECTS = 15
 
 
 class WebMessagesError(Exception):
@@ -130,10 +133,10 @@ class EduVulcanWebClient:
     def __init__(self, hass: HomeAssistant, username: str, password: str) -> None:
         self._username = username
         self._password = password
+        # Vulcan session cookies contain "+/=:"; aiohttp would send them quoted
+        # ("...") and the login server then answers 404.
         self._session: aiohttp.ClientSession = async_create_clientsession(
-            hass,
-            cookie_jar=aiohttp.CookieJar(),
-            headers={"User-Agent": USER_AGENT, "Accept-Language": "pl-PL,pl;q=0.9"},
+            hass, cookie_jar=aiohttp.CookieJar(quote_cookie=False)
         )
         self._lock = asyncio.Lock()
         self._tenant: str | None = None
@@ -148,11 +151,35 @@ class EduVulcanWebClient:
 
     # --- low level -----------------------------------------------------------------
 
-    async def _get(self, url: str, **kwargs: Any) -> tuple[str, str]:
-        async with self._session.get(url, **kwargs) as resp:
-            text = await resp.text()
-            final = str(resp.url)
-        return await self._follow_sso_forms(final, text)
+    async def _request(
+        self, method: str, url: str, data: dict[str, str] | None = None
+    ) -> tuple[str, str]:
+        """Follow redirects ourselves, passing each Location on unchanged like a
+        browser does (aiohttp would re-quote ``wtrealm=https%3A%2F%2F...``).
+
+        Home Assistant replaces the session User-Agent, so the browser one is
+        set on every request.
+        """
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "pl-PL,pl;q=0.9",
+        }
+        target = URL(url, encoded=True)
+        for _ in range(MAX_REDIRECTS):
+            async with self._session.request(
+                method, target, data=data, headers=headers, allow_redirects=False
+            ) as resp:
+                location = resp.headers.get("Location")
+                if resp.status not in (301, 302, 303, 307, 308) or not location:
+                    return str(resp.url), await resp.text()
+            target = URL(urljoin(str(target), location), encoded=True)
+            if resp.status in (301, 302, 303):
+                method, data = "GET", None
+        raise WebMessagesError(f"too many redirects at {_where(target)}")
+
+    async def _get(self, url: str) -> tuple[str, str]:
+        return await self._follow_sso_forms(*await self._request("GET", url))
 
     async def _follow_sso_forms(self, url: str, text: str) -> tuple[str, str]:
         """Post self-submitting SSO forms (only hidden inputs) like a browser would."""
@@ -170,9 +197,7 @@ class EduVulcanWebClient:
             if not _trusted(target):
                 break
             _LOGGER.debug("eduVULCAN web: SSO form %s -> %s", _where(url), _where(target))
-            async with self._session.post(target, data=forms[0].inputs) as resp:
-                text = await resp.text()
-                url = str(resp.url)
+            url, text = await self._request("POST", target, forms[0].inputs)
         return url, text
 
     # --- login and unit selection ----------------------------------------------------
@@ -199,10 +224,10 @@ class EduVulcanWebClient:
         token = form.inputs.get("__RequestVerificationToken", "")
 
         # Same pre-check the login page makes after the e-mail step.
-        async with self._session.post(
-            QUERY_USER_URL, data={"alias": self._username, "__RequestVerificationToken": token}
-        ) as resp:
-            info = await resp.json(content_type=None)
+        _, body = await self._request(
+            "POST", QUERY_USER_URL, {"alias": self._username, "__RequestVerificationToken": token}
+        )
+        info = json.loads(body)
         if not info.get("success") or (info.get("data") or {}).get("ShowCaptcha"):
             raise WebCaptchaRequired("eduVULCAN asks for a captcha")
 
@@ -212,10 +237,9 @@ class EduVulcanWebClient:
             "captcha-response": "",
             "__RequestVerificationToken": token,
         }
-        async with self._session.post(urljoin(url, form.action or url), data=data) as resp:
-            text = await resp.text()
-            url = str(resp.url)
-        url, text = await self._follow_sso_forms(url, text)
+        url, text = await self._follow_sso_forms(
+            *await self._request("POST", urljoin(url, form.action or url), data)
+        )
         if urlsplit(url).path.rstrip("/").endswith("/logowanie"):
             raise WebAuthError("eduVULCAN rejected the e-mail or password")
         _LOGGER.debug("eduVULCAN web: logged in, landed on %s", _where(url))
@@ -248,7 +272,7 @@ class EduVulcanWebClient:
             raise WebMessagesError(f"pupil {pupil!r} not on the journal list ({names})")
         url, _ = await self._get(link)
         _LOGGER.debug("eduVULCAN web: journal link for %s -> %s", pupil, _where(url))
-        url, _ = await self._get(f"{WEB_BASE}/{tenant}/App/odebrane")
+        url, _ = await self._get(f"{WEB_BASE}/{tenant}/App")
         if not url.startswith(f"{WEB_BASE}/{tenant}/"):
             raise WebMessagesError(f"messages module for {tenant} redirected to {_where(url)}")
         self._tenant = tenant
@@ -257,7 +281,11 @@ class EduVulcanWebClient:
         async with self._session.get(
             f"{WEB_BASE}/{tenant}/api/{endpoint}",
             params=params,
-            headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"},
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
             allow_redirects=False,
         ) as resp:
             if resp.status != 200 or "json" not in resp.content_type:
